@@ -5,7 +5,12 @@
 //    - des constantes pour rendre plus lisible les comunications
 //    - des fonctions communes (création tubes, écriture dans un tube,
 //      manipulation de sémaphores, ...)
+#define MON_FICHIER "master_client.h"
+#define CLIENT_PRESENT 10
+#define CLIENT_ECRITURE 20
 
+#define ECRITURE_CLIENT "Client-master"
+#define ECRITURE_MASTER "Master-client"
 // ordres possibles pour le master
 #define ORDER_NONE                0
 #define ORDER_STOP               -1

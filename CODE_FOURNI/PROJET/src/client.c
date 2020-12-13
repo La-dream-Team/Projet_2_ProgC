@@ -7,6 +7,15 @@
 #include <stdbool.h>
 #include <string.h>
 
+//
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+//
+
 #include "myassert.h"
 
 #include "master_client.h"
@@ -114,6 +123,39 @@ int main(int argc, char * argv[])
     //
     // N'hésitez pas à faire des fonctions annexes ; si la fonction main
     // ne dépassait pas une trentaine de lignes, ce serait bien.
-    
+    key_t key1, key2;
+    key1 = ftok(MON_FICHIER, CLIENT_PRESENT);
+    key2 = ftok(MON_FICHIER, CLIENT_ECRITURE);
+    int semid1 = semget(key1, 1, 0);
+    int semid2 = semget(key2, 1, 0);
+
+    // on attend que la place soit libre
+    struct sembuf sb = { 0 , 0 , 0 };
+    semop(semid1, &sb, 1);
+
+    // la place est libre on bloque pour etre le seul client sur le master
+    sb.sem_op = 1;
+    semop(semid1, &sb, 1);
+
+    // on debloque le master pour qu'il nous laisse ecrire
+    sb.sem_op = -1;
+    semop(semid2, &sb, 1);
+
+    int lecture = open(ECRITURE_MASTER, O_RDONLY);
+    int ecriture = open(ECRITURE_CLIENT, O_WRONLY);
+
+
+
+
+
+    // fermeture des tubes nommes
+    close(lecture);
+    close(ecriture);
+
+    // le programme est fini je debloque la sem
+    sb.sem_op = -1;
+    semop(semid1, &sb, 1);
+
+
     return EXIT_SUCCESS;
 }
