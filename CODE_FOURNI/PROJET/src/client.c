@@ -133,6 +133,10 @@ int main(int argc, char * argv[])
     struct sembuf sb = { 0 , 0 , 0 };
     semop(semid1, &sb, 1);
 
+    //- entrer en section critique :
+    //           . pour empêcher que 2 clients communiquent simultanément
+    //           . le mutex est déjà créé par le master
+
     // la place est libre on bloque pour etre le seul client sur le master
     sb.sem_op = 1;
     semop(semid1, &sb, 1);
@@ -141,17 +145,29 @@ int main(int argc, char * argv[])
     sb.sem_op = -1;
     semop(semid2, &sb, 1);
 
+    //    - ouvrir les tubes nommés (ils sont déjà créés par le master)
+    //           . les ouvertures sont bloquantes, il faut s'assurer que
+    //             le master ouvre les tubes dans le même ordre
     int lecture = open(ECRITURE_MASTER, O_RDONLY);
     int ecriture = open(ECRITURE_CLIENT, O_WRONLY);
 
 
+    //    - envoyer l'ordre et les données éventuelles au master
+
+
+    //    - attendre la réponse sur le second tube
+
+
+    //    - sortir de la section critique
 
 
 
+    //- libérer les ressources (fermeture des tubes, ...)
     // fermeture des tubes nommes
     close(lecture);
     close(ecriture);
 
+    //- débloquer le master grâce à un second sémaphore (cf. ci-dessous)
     // le programme est fini je debloque la sem
     sb.sem_op = -1;
     semop(semid1, &sb, 1);

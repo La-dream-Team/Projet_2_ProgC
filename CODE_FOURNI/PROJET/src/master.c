@@ -63,6 +63,7 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
     int scan;
     fscanf(lecture, "%d", &scan);
     switch (scan){
+
         // - si ORDER_STOP
         case ORDER_STOP :
             //. envoyer ordre de fin au premier worker et attendre sa fin
@@ -70,9 +71,9 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
             //. envoyer un accusé de réception au client
             fprintf(ecriture, "%d", scan);
             break;
+
         // - si ORDER_COMPUTE_PRIME
-        case ORDER_COMPUTE_PRIME:
-            
+        case ORDER_COMPUTE_PRIME :
             //. récupérer le nombre N à tester provenant du client
             fscanf(lecture, "%d", &data.nbr_courrant);
             //. construire le pipeline jusqu'au nombre N-1 (si non encore fait) :
@@ -82,24 +83,44 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
             for(int i = data.max_premier + 1; i < data.nbr_courrant; i++){
                 //PIPELINE À CONSTRUIRE
             }
-            //       . envoyer N dans le pipeline
+            //. envoyer N dans le pipeline
             write(Master_workers[1], &data.nbr_courrant, sizeof(int));
-            //       . récupérer la réponse
+            //. récupérer la réponse
             int res;
             read(Workers_master[0], &res, sizeof(int));
-            //       . la transmettre au client
+            //. la transmettre au client
             fprintf(ecriture, "%d", res);
             break;
+
+        // - si ORDER_HOW_MANY_PRIME
+        case ORDER_HOW_MANY_PRIME :
+            //. la transmettre la réponse au client
+            fprintf(ecriture, "%d", data.nb_premiers_calcules);
+            break;
+
+        // - si ORDER_HIGHEST_PRIME
+        case ORDER_HIGHEST_PRIME :
+            //. la transmettre la réponse au client
+            fprintf(ecriture, "%d", data.max_premier);
+            break;
+
         default:
+            //. envoyer un accusé de réception au client
+            fprintf(ecriture, "%d", scan);
+            break;
+
+        // - fermer les tubes nommés
+        close(lecture); // fermeture de la lecture MASTER-CLIENT
+        close(ecriture); // fermeture de l'ecriture MASTER-CLIENT
+
+        // - attendre ordre du client avant de continuer (sémaphore : précédence)
+        sb.sem_op = 0;
+        semop(semid, &sb, 1); 
     };
     
     
     
-    // - si ORDER_HOW_MANY_PRIME
-    //       . transmettre la réponse au client
-    // - si ORDER_HIGHEST_PRIME
-    //       . transmettre la réponse au client
-    // - fermer les tubes nommés
+    
     // - attendre ordre du client avant de continuer (sémaphore : précédence)
     // - revenir en début de boucle
     //
@@ -173,8 +194,8 @@ int main(int argc, char * argv[])
     semctl(semid2, -1, IPC_RMID);
 
     //Destruction des tubes nommes
-
-
+    unlink(ECRITURE_CLIENT);
+    unlink(ECRITURE_MASTER);
 
     return EXIT_SUCCESS;
 }
