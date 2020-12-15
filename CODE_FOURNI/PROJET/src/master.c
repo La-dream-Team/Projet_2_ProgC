@@ -50,7 +50,7 @@ static void usage(const char *exeName, const char *message)
  * boucle principale de communication avec le client
  ************************************************************************/
 void loop( struct sembuf sb, int semid, int * Master_workers,
-                int * Workers_master/* paramètres */, MasterData data)
+                int * Workers_master, MasterData data)
 {
     // boucle infinie :
     // - ouverture des tubes (cf. rq client.c)
@@ -61,7 +61,7 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
     semop(semid, &sb, 1);
 
     int scan;
-    fscanf(lecture, "%d", &scan);
+    read(lecture, &scan, sizeof(int));
     switch (scan){
 
         // - si ORDER_STOP
@@ -69,13 +69,13 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
             //. envoyer ordre de fin au premier worker et attendre sa fin
             write(Master_workers[1], &scan, sizeof(int));
             //. envoyer un accusé de réception au client
-            fprintf(ecriture, "%d", scan);
+            write(ecriture, &scan, sizeof(int));
             break;
 
         // - si ORDER_COMPUTE_PRIME
         case ORDER_COMPUTE_PRIME :
             //. récupérer le nombre N à tester provenant du client
-            fscanf(lecture, "%d", &data.nbr_courrant);
+            read(lecture, &data.nbr_courrant, sizeof(int));
             //. construire le pipeline jusqu'au nombre N-1 (si non encore fait) :
             //             il faut connaître le plus nombre (M) déjà enovoyé aux workers
             //             on leur envoie tous les nombres entre M+1 et N-1
@@ -99,25 +99,23 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
             }
             //. la transmettre au client 
             fprintf(ecriture, "%d", data.nbr_courrant);
-
-            
             break;
 
         // - si ORDER_HOW_MANY_PRIME
         case ORDER_HOW_MANY_PRIME :
             //. la transmettre la réponse au client
-            fprintf(ecriture, "%d", data.nb_premiers_calcules);
+            write(ecriture, &data.nb_premiers_calcules, sizeof(int));
             break;
 
         // - si ORDER_HIGHEST_PRIME
         case ORDER_HIGHEST_PRIME :
             //. la transmettre la réponse au client
-            fprintf(ecriture, "%d", data.max_premier);
+            write(ecriture, &data.max_premier, sizeof(int));
             break;
 
         default:
             //. envoyer un accusé de réception au client
-            fprintf(ecriture, "%d", scan);
+            write(ecriture, &scan, sizeof(int));
             break;
 
         // - fermer les tubes nommés
@@ -164,16 +162,16 @@ int main(int argc, char * argv[])
     
     //Creation de la semaphore de presence du client
     int semid1 = semget(key1, 1, IPC_CREAT+S_IRUSR+S_IWUSR+S_IRGRP+S_IXOTH+IPC_EXCL);
-    assert(semid1 != -1);
+    myassert(semid1 != -1, "Erreur lors de la création de la semaphore");
 
     //Blocage semaphore 1
     semop(semid1, &sb, 1);
 
     //Creation de la semaphore d'ecriture du client
     int semid2 = semget(key2, 1, IPC_CREAT+S_IRUSR+S_IWUSR+S_IRGRP+S_IXOTH+IPC_EXCL);
-    assert(semid2 != -1);
+    myassert(semid2 != -1, "Erreur lors de la création de la semaphore");
 
-    //Blocage semaphore 1
+    //Blocage semaphore 2
     semop(semid2, &sb, 1); 
 
     // - création des tubes nommés
@@ -183,11 +181,16 @@ int main(int argc, char * argv[])
     // - création du premier worker
     int Master_workers[2];
     int Workers_master[2];
-    assert(pipe(Master_workers) != -1);
-	assert(pipe(Workers_master) != -1);
+    myassert(pipe(Master_workers) != -1, "Erreur lors de la creation d'une pipe");
+	myassert(pipe(Workers_master) != -1, "Erreur lors de la creation d'une pipe");
 
-    int work[3] = {2, Master_workers[0], Workers_master[1]};
-    execv("./worker", &((char *) work) );
+    char* ret_worker [5];
+                ret_worker[0] = "./worker";
+                sprintf(ret_worker[1], "%d", 2);
+                sprintf(ret_worker[2], "%d", Master_workers[0]);
+                sprintf(ret_worker[3], "%d", Workers_master[1]);
+                ret_worker[4] = NULL;
+    execv("./worker", ret_worker);
     close(Master_workers[0]); // fermeture de la lecture
     close(Workers_master[1]); // fermeture de l'ecriture
 
@@ -196,7 +199,7 @@ int main(int argc, char * argv[])
     semop(semid1, &sb, 1);
 
     // boucle infinie
-    loop(sb, semid2,Master_workers , Workers_master/* paramètres */);
+    loop(sb, semid2, Master_workers , Workers_master, data);
 
 
     //Destructions :
