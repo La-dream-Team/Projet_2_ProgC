@@ -154,16 +154,16 @@ int main(int argc, char * argv[])
 
     //    - envoyer l'ordre et les données éventuelles au master
     
-    fprintf(ecriture, "%d", order); //On envoi l'ordre au master
+    write(ecriture, &order, sizeof(int)); //On envoi l'ordre au master
     
     if(argc == 3){
         number = strtol(argv[2], NULL, 10);
-        fprintf(ecriture, "%d", number); //On envoi le numero a tester au master
+        write(ecriture, &number, sizeof(int)); //On envoi le numero a tester au master
     }
     
     //    - attendre la réponse sur le second tube
     int res;
-    fscanf(lecture, "%d", &res);
+    read(lecture, &res, sizeof(int));
 
     //    - sortir de la section critique
     sb.sem_op = 1;
