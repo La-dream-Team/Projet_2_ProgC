@@ -153,9 +153,10 @@ int main(int argc, char * argv[])
 
 
     //    - envoyer l'ordre et les données éventuelles au master
-    fprintf(ecriture, "%d", order);
-
-    //    - attendre la réponse sur le second tube
+    number = strtol(argv[2], NULL, 10);
+    fprintf(ecriture, "%d", order); //On envoi l'ordre au master
+    fprintf(ecriture, "%d", number); //On envoi le numero a tester au master
+    
     
     switch (order)
     {
@@ -166,8 +167,10 @@ int main(int argc, char * argv[])
     default:
         break;
     }
+    
+    //    - attendre la réponse sur le second tube
     int res;
-    fscanf(lecture, "%d", &data.nbr_courrant);
+    fscanf(lecture, "%d", &res);
 
     //    - sortir de la section critique
 
