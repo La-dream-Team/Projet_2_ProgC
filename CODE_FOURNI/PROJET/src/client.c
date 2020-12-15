@@ -153,10 +153,21 @@ int main(int argc, char * argv[])
 
 
     //    - envoyer l'ordre et les données éventuelles au master
-
+    fprintf(ecriture, "%d", order);
 
     //    - attendre la réponse sur le second tube
-
+    
+    switch (order)
+    {
+    case /* constant-expression */:
+        /* code */
+        break;
+    
+    default:
+        break;
+    }
+    int res;
+    fscanf(lecture, "%d", &data.nbr_courrant);
 
     //    - sortir de la section critique
 
