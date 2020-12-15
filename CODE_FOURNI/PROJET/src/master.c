@@ -81,15 +81,26 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
             //             on leur envoie tous les nombres entre M+1 et N-1
             //             note : chaque envoie déclenche une réponse des workers
             for(int i = data.max_premier + 1; i < data.nbr_courrant; i++){
-                //PIPELINE À CONSTRUIRE
+                //. envoyer N dans le pipeline
+                write(Master_workers[1], i, sizeof(int));
+                //. récupérer la réponse
+                int res;
+                read(Workers_master[0], &res, sizeof(int));
+
+                if(res == i){
+                    data.max_premier = i;
+                    data.nb_premiers_calcules ++;
+                }
             }
-            //. envoyer N dans le pipeline
-            write(Master_workers[1], &data.nbr_courrant, sizeof(int));
-            //. récupérer la réponse
-            int res;
-            read(Workers_master[0], &res, sizeof(int));
-            //. la transmettre au client
-            fprintf(ecriture, "%d", res);
+            
+            // si le nombre a rechercher n'est pas premier on renvoie 0
+            if(data.max_premier != data.nbr_courrant){
+                data.nbr_courrant = 0;
+            }
+            //. la transmettre au client 
+            fprintf(ecriture, "%d", data.nbr_courrant);
+
+            
             break;
 
         // - si ORDER_HOW_MANY_PRIME
@@ -126,6 +137,7 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
     //
     // il est important d'ouvrir et fermer les tubes nommés à chaque itération
     // voyez-vous pourquoi ?
+    // il faut ne pas
 }
 
 
