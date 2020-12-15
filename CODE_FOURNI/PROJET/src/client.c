@@ -153,19 +153,12 @@ int main(int argc, char * argv[])
 
 
     //    - envoyer l'ordre et les données éventuelles au master
-    number = strtol(argv[2], NULL, 10);
+    
     fprintf(ecriture, "%d", order); //On envoi l'ordre au master
-    fprintf(ecriture, "%d", number); //On envoi le numero a tester au master
     
-    
-    switch (order)
-    {
-    case /* constant-expression */:
-        /* code */
-        break;
-    
-    default:
-        break;
+    if(argc == 3){
+        number = strtol(argv[2], NULL, 10);
+        fprintf(ecriture, "%d", number); //On envoi le numero a tester au master
     }
     
     //    - attendre la réponse sur le second tube
@@ -173,7 +166,8 @@ int main(int argc, char * argv[])
     fscanf(lecture, "%d", &res);
 
     //    - sortir de la section critique
-
+    sb.sem_op = 1;
+    semop(semid2, &sb, 1);
 
 
     //- libérer les ressources (fermeture des tubes, ...)
