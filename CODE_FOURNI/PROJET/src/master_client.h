@@ -6,11 +6,11 @@
 //    - des fonctions communes (création tubes, écriture dans un tube,
 //      manipulation de sémaphores, ...)
 #define MON_FICHIER "master_client.h"
-#define CLIENT_PRESENT 10
-#define CLIENT_ECRITURE 20
+#define CLIENT_PRESENT 5
+#define CLIENT_ECRITURE 10
 
-#define ECRITURE_CLIENT "Client-master"
-#define ECRITURE_MASTER "Master-client"
+#define ECRITURE_CLIENT "pipe_cl2ma"
+#define ECRITURE_MASTER "pipe_ma2cl"
 // ordres possibles pour le master
 #define ORDER_NONE                0
 #define ORDER_STOP               -1

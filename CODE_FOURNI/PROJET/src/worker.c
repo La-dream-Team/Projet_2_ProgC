@@ -108,8 +108,13 @@ void loop(WorkerData data)
         }
         else
         {
-            //- le nombre n'est pas premier
             int ret = 0;
+            if(nombre_a_tester == data.premier_en_charge)
+            {
+                ret = 1;
+            }
+            //- le nombre n'est pas premier si ret = 0 
+            //- le nombre est premier si ret = 1 
             write(data.ecriture_master, &ret, sizeof(int));
         }  
     }while(true);
@@ -131,7 +136,8 @@ int main(int argc, char * argv[])
     // Envoyer au master un message positif pour dire
     // que le nombre testé est bien premier
 
-    write(data.ecriture_master, &data.premier_en_charge, sizeof(int));
+    int ret = 1;
+    write(data.ecriture_master, &ret, sizeof(int));
 
     loop(data);
 

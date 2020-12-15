@@ -52,90 +52,102 @@ static void usage(const char *exeName, const char *message)
 void loop( struct sembuf sb, int semid, int * Master_workers,
                 int * Workers_master, MasterData data)
 {
-    // boucle infinie :
-    // - ouverture des tubes (cf. rq client.c)
-    int lecture = open(ECRITURE_CLIENT, O_RDONLY);
-    int ecriture = open(ECRITURE_MASTER, O_WRONLY);
-    // - attente d'un ordre du client (via le tube nommé)
-    sb.sem_op = 0;
-    semop(semid, &sb, 1);
-
-    int scan;
-    read(lecture, &scan, sizeof(int));
-    switch (scan){
-
-        // - si ORDER_STOP
-        case ORDER_STOP :
-            //. envoyer ordre de fin au premier worker et attendre sa fin
-            write(Master_workers[1], &scan, sizeof(int));
-            //. envoyer un accusé de réception au client
-            write(ecriture, &scan, sizeof(int));
-            break;
-
-        // - si ORDER_COMPUTE_PRIME
-        case ORDER_COMPUTE_PRIME :
-            //. récupérer le nombre N à tester provenant du client
-            read(lecture, &data.nbr_courrant, sizeof(int));
-            //. construire le pipeline jusqu'au nombre N-1 (si non encore fait) :
-            //             il faut connaître le plus nombre (M) déjà enovoyé aux workers
-            //             on leur envoie tous les nombres entre M+1 et N-1
-            //             note : chaque envoie déclenche une réponse des workers
-            for(int i = data.max_premier + 1; i < data.nbr_courrant; i++){
-                //. envoyer N dans le pipeline
-                write(Master_workers[1], i, sizeof(int));
-                //. récupérer la réponse
-                int res;
-                read(Workers_master[0], &res, sizeof(int));
-
-                if(res == i){
-                    data.max_premier = i;
-                    data.nb_premiers_calcules ++;
-                }
-            }
-            
-            // si le nombre a rechercher n'est pas premier on renvoie 0
-            if(data.max_premier != data.nbr_courrant){
-                data.nbr_courrant = 0;
-            }
-            //. la transmettre au client 
-            fprintf(ecriture, "%d", data.nbr_courrant);
-            break;
-
-        // - si ORDER_HOW_MANY_PRIME
-        case ORDER_HOW_MANY_PRIME :
-            //. la transmettre la réponse au client
-            write(ecriture, &data.nb_premiers_calcules, sizeof(int));
-            break;
-
-        // - si ORDER_HIGHEST_PRIME
-        case ORDER_HIGHEST_PRIME :
-            //. la transmettre la réponse au client
-            write(ecriture, &data.max_premier, sizeof(int));
-            break;
-
-        default:
-            //. envoyer un accusé de réception au client
-            write(ecriture, &scan, sizeof(int));
-            break;
-
-        // - fermer les tubes nommés
-        close(lecture); // fermeture de la lecture MASTER-CLIENT
-        close(ecriture); // fermeture de l'ecriture MASTER-CLIENT
-
-        // - attendre ordre du client avant de continuer (sémaphore : précédence)
+    do
+    {
+        // boucle infinie :
+        // - ouverture des tubes (cf. rq client.c)
+        int lecture = open(ECRITURE_CLIENT, O_RDONLY);
+        int ecriture = open(ECRITURE_MASTER, O_WRONLY);
+        // - attente d'un ordre du client (via le tube nommé)
         sb.sem_op = 0;
-        semop(semid, &sb, 1); 
-    };
-    
-    
-    
-    
-    // - attendre ordre du client avant de continuer (sémaphore : précédence)
+        semop(semid, &sb, 1);
+
+        int scan;
+        read(lecture, &scan, sizeof(int));
+        switch (scan){
+
+            // - si ORDER_STOP
+            case ORDER_STOP :
+                //. envoyer ordre de fin au premier worker et attendre sa fin
+                write(Master_workers[1], &scan, sizeof(int));
+                //. envoyer un accusé de réception au client
+                write(ecriture, &scan, sizeof(int));
+                break;
+
+            // - si ORDER_COMPUTE_PRIME
+            case ORDER_COMPUTE_PRIME :
+                //. récupérer le nombre N à tester provenant du client
+                read(lecture, &data.nbr_courrant, sizeof(int));
+                //. construire le pipeline jusqu'au nombre N-1 (si non encore fait) :
+                //             il faut connaître le plus nombre (M) déjà enovoyé aux workers
+                //             on leur envoie tous les nombres entre M+1 et N-1
+                //             note : chaque envoie déclenche une réponse des workers
+                if(data.nbr_courrant > *data.max_premier)
+                {
+                    for(int i = *data.max_premier + 1; i < data.nbr_courrant; i++){
+                        //. envoyer N dans le pipeline
+                        write(Master_workers[1], &i, sizeof(int));
+                        //. récupérer la réponse
+                        int res;
+                        read(Workers_master[0], &res, sizeof(int));
+
+                        if(res == i){
+                            *data.max_premier = i;
+                            data.nb_premiers_calcules ++;
+                        }
+                    }
+                    
+                    /*// si le nombre a rechercher n'est pas premier on renvoie 0
+                    if(data.max_premier != data.nbr_courrant){
+                        data.nbr_courrant = 0;
+                    }*/
+                }
+                else
+                {
+                    write(Master_workers[1], &data.nbr_courrant, sizeof(int));
+                
+                    read(Workers_master[0], &data.nbr_courrant, sizeof(int));
+                }
+                /*
+                //. la transmettre au client 
+                if(data.nbr_courrant != 0)
+                {
+                    data.nbr_courrant = 1;
+                }*/
+                write(ecriture, &data.nbr_courrant, sizeof(int));
+                break;
+
+            // - si ORDER_HOW_MANY_PRIME
+            case ORDER_HOW_MANY_PRIME :
+                //. la transmettre la réponse au client
+                write(ecriture, &data.nb_premiers_calcules, sizeof(int));
+                break;
+
+            // - si ORDER_HIGHEST_PRIME
+            case ORDER_HIGHEST_PRIME :
+                //. la transmettre la réponse au client
+                write(ecriture, &data.max_premier, sizeof(int));
+                break;
+
+            default:
+                //. envoyer un accusé de réception au client
+                write(ecriture, &scan, sizeof(int));
+                break;
+
+            // - fermer les tubes nommés
+            close(lecture); // fermeture de la lecture MASTER-CLIENT
+            close(ecriture); // fermeture de l'ecriture MASTER-CLIENT
+
+            // - attendre ordre du client avant de continuer (sémaphore : précédence)
+            sb.sem_op = 0;
+            semop(semid, &sb, 1); 
+        }
     // - revenir en début de boucle
-    //
+    }while(true);
+    
     // il est important d'ouvrir et fermer les tubes nommés à chaque itération
     // voyez-vous pourquoi ?
-    // il faut ne pas
+    
 }
 
 
@@ -175,8 +187,10 @@ int main(int argc, char * argv[])
     semop(semid2, &sb, 1); 
 
     // - création des tubes nommés
-    myassert(mkfifo(ECRITURE_CLIENT, 0600) != -1, "Erreur lors de la creation du tube nome !");
-    myassert(mkfifo(ECRITURE_MASTER, 0600) != -1, "Erreur lors de la creation du tube nome !");
+    int ret = mkfifo(ECRITURE_MASTER, 0666);
+    myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
+    ret = mkfifo(ECRITURE_CLIENT, 0666);
+    myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
 
     // - création du premier worker
     int Master_workers[2];
@@ -186,7 +200,7 @@ int main(int argc, char * argv[])
 
     char* ret_worker [5];
                 ret_worker[0] = "./worker";
-                sprintf(ret_worker[1], "%d", 2);
+                ret_worker[1] = "2";
                 sprintf(ret_worker[2], "%d", Master_workers[0]);
                 sprintf(ret_worker[3], "%d", Workers_master[1]);
                 ret_worker[4] = NULL;
