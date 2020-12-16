@@ -6,6 +6,14 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <fcntl.h>
+
 #include "myassert.h"
 
 #include "master_worker.h"
@@ -89,6 +97,9 @@ void loop(WorkerData data)
                 //Création de la listre d'arguments necessaires pour le nouveau worker
                 char* argv [5];
                 argv[0] = "./worker";
+                argv[1] = malloc(10 * sizeof(char));
+                argv[2] = malloc(10 * sizeof(char));
+                argv[3] = malloc(10 * sizeof(char));
                 sprintf(argv[1], "%d", nombre_a_tester);
                 sprintf(argv[2], "%d", data.ecriture_worker_suivant[0]);
                 sprintf(argv[3], "%d", data.ecriture_master);
@@ -129,8 +140,8 @@ int main(int argc, char * argv[])
     WorkerData data;
     parseArgs(argc, argv, &data);
     
-    open(data.ecriture_master);
-    open(data.lecture);
+    //open(&data.ecriture_master, O_WRONLY);
+    //open(&data.lecture, O_RDONLY);
 
     // Si on est créé c'est qu'on est un nombre premier
     // Envoyer au master un message positif pour dire

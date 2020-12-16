@@ -13,6 +13,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 //
 #include "myassert.h"
 
@@ -199,12 +200,16 @@ int main(int argc, char * argv[])
 	myassert(pipe(Workers_master) != -1, "Erreur lors de la creation d'une pipe");
 
     char* ret_worker [5];
-                ret_worker[0] = "./worker";
-                ret_worker[1] = "2";
-                sprintf(ret_worker[2], "%d", Master_workers[0]);
-                sprintf(ret_worker[3], "%d", Workers_master[1]);
-                ret_worker[4] = NULL;
+    ret_worker[0] = "./worker";
+    ret_worker[1] = "2";
+    ret_worker[2] = malloc(10 * sizeof(char));
+    ret_worker[3] = malloc(10 * sizeof(char));
+    sprintf(ret_worker[2], "%d", Master_workers[0]);
+    sprintf(ret_worker[3], "%d", Workers_master[1]);
+    ret_worker[4] = NULL;
+
     execv("./worker", ret_worker);
+
     close(Master_workers[0]); // fermeture de la lecture
     close(Workers_master[1]); // fermeture de l'ecriture
 
