@@ -85,6 +85,77 @@ static int parseArgs(int argc, char * argv[], int *number)
     return order;
 }
 
+typedef struct ThreadData
+{
+    int number, div;
+    bool * res;
+}ThreadData;
+
+void * codeThread(void * arg)
+{
+    ThreadData *data = (ThreadData *) arg;
+    if((data->number % data->div) == 0)
+    {
+        *(data)->res = false;
+    }
+    else
+    {
+        *(data)->res = true;
+    }
+    return NULL;
+}
+
+void testPrimeWithThreads(int number)
+{
+    int NB_THREADS = number - 3;
+
+    bool results[NB_THREADS];
+
+    pthread_t tabId[NB_THREADS];
+
+    ThreadData datas[NB_THREADS];
+
+    for(int i = 0; i < NB_THREADS; i++)
+    {
+        datas[i].res = &(results[i]);
+        datas[i].div = i;
+        datas[i].number = number;
+    }
+
+    for(int i = 0; i < NB_THREADS; i++)
+    {
+        int ret = pthread_create(&(tabId[i]), NULL, codeThread, &(datas[i]));
+        myassert(ret == 0, "Erreur lors de la création des threads");
+    }
+
+    for(int i = 0; i < NB_THREADS; i++)
+    {
+        int ret = pthread_join(tabId[i], NULL);
+        myassert(ret == 0, "Erreur lors de l'attente des threads");
+    }
+
+    bool prime = true;
+
+    for(int i = 0; i < NB_THREADS; i++)
+    {
+        if(!(results[i]))
+        {
+            prime = false;
+            break;
+        }
+    }
+
+    if(prime)
+    {
+        printf("On attend que le nombre %d soit un nombre premier", number);
+    }
+    else
+    {
+        printf("On n'attend pas que le nombre %d soit un nombre premier", number);
+    }
+    
+    
+}
 
 /************************************************************************
  * Fonction principale
@@ -123,63 +194,118 @@ int main(int argc, char * argv[])
     //
     // N'hésitez pas à faire des fonctions annexes ; si la fonction main
     // ne dépassait pas une trentaine de lignes, ce serait bien.
-    key_t key1, key2;
-    key1 = ftok(MON_FICHIER, CLIENT_PRESENT);
-    key2 = ftok(MON_FICHIER, CLIENT_ECRITURE);
-    int semid1 = semget(key1, 1, 0);
-    int semid2 = semget(key2, 1, 0);
 
-    // on attend que la place soit libre
-    struct sembuf sb = { 0 , 0 , 0 };
-    semop(semid1, &sb, 1);
-
-    //- entrer en section critique :
-    //           . pour empêcher que 2 clients communiquent simultanément
-    //           . le mutex est déjà créé par le master
-
-    // la place est libre on bloque pour etre le seul client sur le master
-    sb.sem_op = 1;
-    semop(semid1, &sb, 1);
-
-    // on debloque le master pour qu'il nous laisse ecrire
-    sb.sem_op = -1;
-    semop(semid2, &sb, 1);
-
-    //    - ouvrir les tubes nommés (ils sont déjà créés par le master)
-    //           . les ouvertures sont bloquantes, il faut s'assurer que
-    //             le master ouvre les tubes dans le même ordre
-    int lecture = open(ECRITURE_MASTER, O_RDONLY);
-    int ecriture = open(ECRITURE_CLIENT, O_WRONLY);
-
-
-    //    - envoyer l'ordre et les données éventuelles au master
-    
-    write(ecriture, &order, sizeof(int)); //On envoi l'ordre au master
-    
-    if(argc == 3){
-        number = strtol(argv[2], NULL, 10);
-        write(ecriture, &number, sizeof(int)); //On envoi le numero a tester au master
+    // si c'est ORDER_COMPUTE_PRIME_LOCAL
+    //    alors c'est un code complètement à part multi-thread
+    if(order == ORDER_COMPUTE_PRIME_LOCAL)
+    {
+        testPrimeWithThreads(number);
     }
-    
-    //    - attendre la réponse sur le second tube
-    int res;
-    read(lecture, &res, sizeof(int));
+    else
+    {
+        key_t key1, key2;
+        key1 = ftok(MON_FICHIER, CLIENT_PRESENT);
+        key2 = ftok(MON_FICHIER, CLIENT_ECRITURE);
+        int semid1 = semget(key1, 1, 0);
+        int semid2 = semget(key2, 1, 0);
 
-    //    - sortir de la section critique
-    sb.sem_op = 1;
-    semop(semid2, &sb, 1);
+        // on attend que la place soit libre
+        struct sembuf sb = { 0 , 0 , 0 };
+        semop(semid1, &sb, 1);
+
+        //- entrer en section critique :
+        //           . pour empêcher que 2 clients communiquent simultanément
+        //           . le mutex est déjà créé par le master
+
+        // la place est libre, on bloque pour etre le seul client sur le master
+        sb.sem_op = 1;
+        semop(semid1, &sb, 1);
+
+        // on debloque le master pour qu'il nous laisse ecrire
+        sb.sem_op = -1;
+        semop(semid2, &sb, 1);
+
+        // on prend le jeton pour bloquer la semaphore client-master
+        sb.sem_op = 1;
+        semop(semid2, &sb, 1);
+
+        //    - ouvrir les tubes nommés (ils sont déjà créés par le master)
+        //           . les ouvertures sont bloquantes, il faut s'assurer que
+        //             le master ouvre les tubes dans le même ordre
+        int lecture = open(ECRITURE_MASTER, O_RDONLY);
+        int ecriture = open(ECRITURE_CLIENT, O_WRONLY);
+
+        //    - envoyer l'ordre et les données éventuelles au master
+        
+        write(ecriture, &order, sizeof(int)); //On envoi l'ordre au master
+        
+        if(argc == 3){
+            number = strtol(argv[2], NULL, 10);
+            write(ecriture, &number, sizeof(int)); //On envoi le numero a tester au master
+        }
 
 
-    //- libérer les ressources (fermeture des tubes, ...)
-    // fermeture des tubes nommes
-    close(lecture);
-    close(ecriture);
-
-    //- débloquer le master grâce à un second sémaphore (cf. ci-dessous)
-    // le programme est fini je debloque la sem
-    sb.sem_op = -1;
-    semop(semid1, &sb, 1);
+        /*// on donne le jeton pour debloquer la semaphore client-master
+        sb.sem_op = -1;
+        semop(semid2, &sb, 1);*/
 
 
+        //    - attendre la réponse sur le second tube
+        int res;
+        read(lecture, &res, sizeof(int));
+        switch (order)
+        {
+            case ORDER_COMPUTE_PRIME : 
+                if(res == 0)
+                {
+                    printf("Le nombre testé, %d, n'est pas un nombre premier.\n", number);
+                }
+                else
+                {
+                    printf("Le nombre testé, %d, est un nombre premier.\n", number);
+                }
+                break;
+            
+            case ORDER_HIGHEST_PRIME :
+                printf("Le nombre premier le plus grand calculé jusqu'au moment est : %d.\n", res);
+                break;
+            case ORDER_HOW_MANY_PRIME :
+                printf("On a calculé %d nombres premiers.\n", res);
+                break;
+        }
+
+
+        //    - sortir de la section critique
+        sb.sem_op = -1;
+        semop(semid1, &sb, 1);
+
+        //- libérer les ressources (fermeture des tubes, ...)
+        // fermeture des tubes nommes
+        close(lecture);
+        close(ecriture);
+
+        //- débloquer le master grâce à un second sémaphore (cf. ci-dessous)
+        // le programme est fini je debloque la sem
+        sb.sem_op = -1;
+        semop(semid2, &sb, 1);
+
+        /*
+        //Creation de la semaphore de presence du client
+        int semid1 = semget(key1, 1, IPC_CREAT | IPC_EXCL | 0641);
+        myassert(semid1 != -1, "Erreur lors de la création de la semaphore");
+
+        //Creation de la semaphore d'ecriture du client
+        int semid2 = semget(key2, 1, IPC_CREAT | IPC_EXCL | 0641);
+        myassert(semid2 != -1, "Erreur lors de la création de la semaphore");
+
+        //Blocage semaphore de presence du client
+        ret = semctl(semid1, 0, SETVAL, 1);
+        myassert(ret != -1, "Erreur lors de la initialisation de la semaphore");
+        
+        //Blocage semaphore d'ecriture du client
+        ret = semctl(semid2, 0, SETVAL, 1);
+        myassert(ret != -1, "Erreur lors de la initialisation de la semaphore"); 
+        */
+    }
     return EXIT_SUCCESS;
 }
