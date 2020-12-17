@@ -199,40 +199,51 @@ int main(int argc, char * argv[])
     myassert(pipe(Master_workers) != -1, "Erreur lors de la creation d'une pipe");
 	myassert(pipe(Workers_master) != -1, "Erreur lors de la creation d'une pipe");
 
-    char* ret_worker [5];
-    ret_worker[0] = "./worker";
-    ret_worker[1] = "2";
-    ret_worker[2] = malloc(10 * sizeof(char));
-    ret_worker[3] = malloc(10 * sizeof(char));
-    sprintf(ret_worker[2], "%d", Master_workers[0]);
-    sprintf(ret_worker[3], "%d", Workers_master[1]);
-    ret_worker[4] = NULL;
 
-    execv("./worker", ret_worker);
+    
 
-    close(Master_workers[0]); // fermeture de la lecture
-    close(Workers_master[1]); // fermeture de l'ecriture
+    if(fork() == 0){
+        // creation de la liste d'argument  
+        char** ret_worker = argListWorker(2 , Master_workers[0] , Workers_master[1] );
+        /*ret_worker[0] = "./worker";
+        ret_worker[1] = "2";
+        ret_worker[2] = malloc(10 * sizeof(char));
+        ret_worker[3] = malloc(10 * sizeof(char));
+        sprintf(ret_worker[2], "%d", Master_workers[0]);
+        sprintf(ret_worker[3], "%d", Workers_master[1]);
+        ret_worker[4] = NULL;*/
+        // creation du nouveau worker
+        execv("./worker", ret_worker);
 
-    // le  programme est initialise. il peut recevoir un client
-    sb.sem_op = -1;
-    semop(semid1, &sb, 1);
+        libererArgListWorker(ret_worker);
+    }
+    else{
+        
+        close(Master_workers[0]); // fermeture de la lecture
+        close(Workers_master[1]); // fermeture de l'ecriture
 
-    // boucle infinie
-    loop(sb, semid2, Master_workers , Workers_master, data);
+        // le  programme est initialise. il peut recevoir un client
+        sb.sem_op = -1;
+        semop(semid1, &sb, 1);
 
+        // boucle infinie
+        loop(sb, semid2, Master_workers , Workers_master, data);
 
-    //Destructions :
+        //Destructions :
 
-    //Destruction des semaphores
-    semctl(semid1, -1, IPC_RMID);
-    semctl(semid2, -1, IPC_RMID);
+        //Destruction des semaphores
+        semctl(semid1, -1, IPC_RMID);
+        semctl(semid2, -1, IPC_RMID);
 
-    //Destruction des tubes nommes
-    unlink(ECRITURE_CLIENT);
-    unlink(ECRITURE_MASTER);
+        //Destruction des tubes nommes
+        unlink(ECRITURE_CLIENT);
+        unlink(ECRITURE_MASTER);
 
-    return EXIT_SUCCESS;
+        return EXIT_SUCCESS;
+    }
 }
+
+
 
 // N'hésitez pas à faire des fonctions annexes ; si les fonctions main
 // et loop pouvaient être "courtes", ce serait bien
