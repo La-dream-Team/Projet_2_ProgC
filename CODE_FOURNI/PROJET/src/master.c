@@ -27,6 +27,15 @@ void creerTubeNommes(){
     myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
     ret = mkfifo(ECRITURE_CLIENT, 0600);
     myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
+    
+    printf("J'ai cree les tubes nommes \n");
+}
+
+void creationDesTubesAnonymes(int * Master_workers, int* Workers_master){
+    myassert(pipe(Master_workers) != -1, "Erreur lors de la creation d'une pipe");
+	myassert(pipe(Workers_master) != -1, "Erreur lors de la creation d'une pipe");
+
+    printf("J'ai cree les tubes annonymes\n");
 }
 
 
@@ -199,16 +208,11 @@ int main(int argc, char * argv[])
     // - création des tubes nommés
     creerTubesNommes();
 
-    printf("J'ai cree les tubes nommes \n");
 
     //- creation tubes annonymes
-    int Master_workers[2];
-    int Workers_master[2];
-    myassert(pipe(Master_workers) != -1, "Erreur lors de la creation d'une pipe");
-	myassert(pipe(Workers_master) != -1, "Erreur lors de la creation d'une pipe");
-    printf("J'ai cree les tubes annonymes\n");
-
-
+    int Master_workers[2], Workers_master[2];
+    creationDesTubesAnonymes(Master_workers, Workers_master);
+    
     // - création du premier worker
     if(fork() == 0){ 
         //code fils

@@ -95,6 +95,8 @@ void loop(WorkerData data)
                 myassert(pipe(ecriture_worker) != -1, "Erreur lors de la création du tube de communication vers le worker suivant");
                 
                 if(fork() == 0){
+                    // code fils
+
                     // Création de la listre d'arguments necessaires pour le nouveau worker
                     char** argv = argListWorker(nombre_a_tester, data.ecriture_worker_suivant[0], data.ecriture_master);
 
@@ -105,11 +107,10 @@ void loop(WorkerData data)
                     break;
                 }
                 else{
+                    // code père
                     //Fermeture de la lecture du tube
                     close(data.ecriture_worker_suivant[0]);
                 }
-
-                
             }
             else
             {
