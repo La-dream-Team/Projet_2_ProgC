@@ -197,6 +197,7 @@ int main(int argc, char * argv[])
 
     // si c'est ORDER_COMPUTE_PRIME_LOCAL
     //    alors c'est un code complètement à part multi-thread
+    
     if(order == ORDER_COMPUTE_PRIME_LOCAL)
     {
         testPrimeWithThreads(number);
@@ -218,39 +219,31 @@ int main(int argc, char * argv[])
         //           . le mutex est déjà créé par le master
 
         // la place est libre, on bloque pour etre le seul client sur le master
-        sb.sem_op = 1;
-        semop(semid1, &sb, 1);
+        lockSem(semid1);
 
-        // on debloque le master pour qu'il nous laisse ecrire
-        sb.sem_op = -1;
+        // On attend le master pour qu'il nous laisse ecrire
         semop(semid2, &sb, 1);
 
-        // on prend le jeton pour bloquer la semaphore client-master
-        sb.sem_op = 1;
-        semop(semid2, &sb, 1);
+        // on bloque la semaphore client-master
+        lockSem(semid2);
 
         //    - ouvrir les tubes nommés (ils sont déjà créés par le master)
         //           . les ouvertures sont bloquantes, il faut s'assurer que
         //             le master ouvre les tubes dans le même ordre
         int lecture = open(ECRITURE_MASTER, O_RDONLY);
+        myassert(lecture != -1, "Erreur lors de l'ouverture du pipe master->client");
         int ecriture = open(ECRITURE_CLIENT, O_WRONLY);
+        myassert(ecriture != -1, "Erreur lors de l'ouverture du pipe master->client");
 
-        //    - envoyer l'ordre et les données éventuelles au master
-        
-        write(ecriture, &order, sizeof(int)); //On envoi l'ordre au master
+        //- envoyer l'ordre et les données éventuelles au master
+        writeOnPipe(ecriture, order);
         
         if(argc == 3){
             number = strtol(argv[2], NULL, 10);
-            write(ecriture, &number, sizeof(int)); //On envoi le numero a tester au master
+            writeOnPipe(ecriture, number); //On envoi le numero a tester au master
         }
 
-
-        /*// on donne le jeton pour debloquer la semaphore client-master
-        sb.sem_op = -1;
-        semop(semid2, &sb, 1);*/
-
-
-        //    - attendre la réponse sur le second tube
+        //- attendre la réponse sur le second tube
         int res;
         read(lecture, &res, sizeof(int));
         switch (order)
@@ -275,9 +268,8 @@ int main(int argc, char * argv[])
         }
 
 
-        //    - sortir de la section critique
-        sb.sem_op = -1;
-        semop(semid1, &sb, 1);
+        //- sortir de la section critique
+        unlockSem(semid1);
 
         //- libérer les ressources (fermeture des tubes, ...)
         // fermeture des tubes nommes
@@ -286,8 +278,7 @@ int main(int argc, char * argv[])
 
         //- débloquer le master grâce à un second sémaphore (cf. ci-dessous)
         // le programme est fini je debloque la sem
-        sb.sem_op = -1;
-        semop(semid2, &sb, 1);
+        unlockSem(semid2);
 
         /*
         //Creation de la semaphore de presence du client

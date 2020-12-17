@@ -22,5 +22,18 @@
 // bref n'hésitez à mettre nombre de fonctions avec des noms explicites
 // pour masquer l'implémentation
 
+void closePipes(int fd1, int fd2); //Fonction pour fermer deux tubes
+
+
+void writeOnPipe(int fd, int msg); //Fonction pour ecrire dans un tube
+
+
+void readOnPipe(int fd, int msg); //Fonction pour lire depuis un tube
+
+
+void lockSem(int semId); //Fonction pour bloquer une semaphore
+
+
+void unlockSem(int semId); //Fonction pour debloquer une semaphore
 
 #endif
