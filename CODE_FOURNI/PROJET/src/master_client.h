@@ -6,8 +6,7 @@
 //    - des fonctions communes (création tubes, écriture dans un tube,
 //      manipulation de sémaphores, ...)
 #define MON_FICHIER "master_client.h"
-#define CLIENT_PRESENT 5
-#define CLIENT_ECRITURE 10
+#define PROJ_ID 5
 
 #define ECRITURE_CLIENT "pipe_cl2ma"
 #define ECRITURE_MASTER "pipe_ma2cl"
@@ -25,15 +24,24 @@
 void closePipes(int fd1, int fd2); //Fonction pour fermer deux tubes
 
 
+void openPipesMaster(int *fd_ecriture, int *fd_lecture); //Fonction pour ouvrir les tubes nommes depuis le master
+
+
+void openPipesClient(int *fd_ecriture, int *fd_lecture); //Fonction pour ouvrir les tubes nommes depuis le client
+
+
 void writeOnPipe(int fd, int msg); //Fonction pour ecrire dans un tube
 
 
 void readOnPipe(int fd, int msg); //Fonction pour lire depuis un tube
 
 
-void lockSem(int semId); //Fonction pour bloquer une semaphore
+void lockSem(int semId, int id); //Fonction pour bloquer une semaphore
 
 
-void unlockSem(int semId); //Fonction pour debloquer une semaphore
+void unlockSem(int semId, int id); //Fonction pour debloquer une semaphore
+
+
+void waitSem(int semId, int id); //Fonction pour attendre le deblocage d'une semaphore
 
 #endif

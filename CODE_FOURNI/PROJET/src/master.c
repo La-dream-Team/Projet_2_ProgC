@@ -50,19 +50,20 @@ static void usage(const char *exeName, const char *message)
 /************************************************************************
  * boucle principale de communication avec le client
  ************************************************************************/
-void loop( struct sembuf sb, int semid, int * Master_workers,
+void loop( int semId, int * Master_workers,
                 int * Workers_master, MasterData data)
 {
     do
     {
+        printf("Je suis rentree dans la boucle\n");
         // boucle infinie :
         // - ouverture des tubes (cf. rq client.c)
-        int lecture = open(ECRITURE_CLIENT, O_RDONLY);
-        int ecriture = open(ECRITURE_MASTER, O_WRONLY);
-        // - attente d'un ordre du client (via le tube nommé)
-        sb.sem_op = 0;
-        semop(semid, &sb, 1);
+        int ecriture, lecture;
+        openPipesMaster(&ecriture, &lecture);
 
+        printf("Je lis dans le tube du client\n");
+
+        // - attente d'un ordre du client (via le tube nommé)
         int scan;
         read(lecture, &scan, sizeof(int));
         switch (scan){
@@ -140,8 +141,7 @@ void loop( struct sembuf sb, int semid, int * Master_workers,
             close(ecriture); // fermeture de l'ecriture MASTER-CLIENT
 
             // - attendre ordre du client avant de continuer (sémaphore : précédence)
-            sb.sem_op = 0;
-            semop(semid, &sb, 1); 
+            unlockSem(semId, 1);
         }
     // - revenir en début de boucle
     }while(true);
@@ -167,73 +167,78 @@ int main(int argc, char * argv[])
     MasterData data = {0, &init_nbrs_premiers_calcules, &init_max_premier};
 
     // - création des sémaphores
-    key_t key1, key2;
-    key1 = ftok(MON_FICHIER, CLIENT_PRESENT);
-    key2 = ftok(MON_FICHIER, CLIENT_ECRITURE);
+    key_t key;
+    key = ftok(MON_FICHIER, PROJ_ID);
 
-    struct sembuf sb = {0, 1, 0};
-    
     //Creation de la semaphore de presence du client
-    int semid1 = semget(key1, 1, IPC_CREAT+S_IRUSR+S_IWUSR+S_IRGRP+S_IXOTH+IPC_EXCL);
-    myassert(semid1 != -1, "Erreur lors de la création de la semaphore");
+    int semId = semget(key, 2, IPC_CREAT | IPC_EXCL | 0641);
+    myassert(semId != -1, "Erreur lors de la création des semaphores");
 
-    //Blocage semaphore 1
-    semop(semid1, &sb, 1);
+    printf("J'ai cree les semaphores \n");
 
-    //Creation de la semaphore d'ecriture du client
-    int semid2 = semget(key2, 1, IPC_CREAT+S_IRUSR+S_IWUSR+S_IRGRP+S_IXOTH+IPC_EXCL);
-    myassert(semid2 != -1, "Erreur lors de la création de la semaphore");
+    //Blocage semaphore de presence du client
+    int ret = semctl(semId, 0, SETVAL, 1);
+    myassert(ret != -1, "Erreur lors de la initialisation de la semaphore 1");
+    
+    //Blocage semaphore d'ecriture du client
+    ret = semctl(semId, 1, SETVAL, 0);
+    myassert(ret != -1, "Erreur lors de la initialisation de la semaphore 2"); 
 
-    //Blocage semaphore 2
-    semop(semid2, &sb, 1); 
+    printf("J'ai initialise les semaphores \n");
 
     // - création des tubes nommés
-    int ret = mkfifo(ECRITURE_MASTER, 0666);
+    ret = mkfifo(ECRITURE_MASTER, 0600);
     myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
-    ret = mkfifo(ECRITURE_CLIENT, 0666);
+    ret = mkfifo(ECRITURE_CLIENT, 0600);
     myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
 
-    // - création du premier worker
+    printf("J'ai cree les tubes nommes \n");
+
+    //- creation tubes annonymes
     int Master_workers[2];
     int Workers_master[2];
     myassert(pipe(Master_workers) != -1, "Erreur lors de la creation d'une pipe");
 	myassert(pipe(Workers_master) != -1, "Erreur lors de la creation d'une pipe");
+    printf("J'ai cree les tubes annonymes\n");
 
 
-    
-
-    if(fork() == 0){
+    // - création du premier worker
+    if(fork() == 0){ 
+        //code fils
+        printf("Creation du worker du nombre 2\n");
         // creation de la liste d'argument  
         char** ret_worker = argListWorker(2 , Master_workers[0] , Workers_master[1] );
-        /*ret_worker[0] = "./worker";
-        ret_worker[1] = "2";
-        ret_worker[2] = malloc(10 * sizeof(char));
-        ret_worker[3] = malloc(10 * sizeof(char));
-        sprintf(ret_worker[2], "%d", Master_workers[0]);
-        sprintf(ret_worker[3], "%d", Workers_master[1]);
-        ret_worker[4] = NULL;*/
+        
+        close(Master_workers[1]); // fermeture de l'ecriture
+        close(Workers_master[0]); // fermeture de la lecture
+        
+
         // creation du nouveau worker
+        printf("Le worker du nombre 2 est crée\n");
         execv("./worker", ret_worker);
 
         libererArgListWorker(ret_worker);
+       
     }
     else{
-        
-        close(Master_workers[0]); // fermeture de la lecture
-        close(Workers_master[1]); // fermeture de l'ecriture
+        sleep(1);
+        //code pere
+        printf("Code workers\n");
+        myassert(close(Master_workers[0])!= -1 , "Erreur lors de la fermeture"); // fermeture de la lecture
+        myassert(close(Workers_master[1])!= -1 , "Erreur lors de la fermeture"); // fermeture de l'ecriture
 
         // le  programme est initialise. il peut recevoir un client
-        sb.sem_op = -1;
-        semop(semid1, &sb, 1);
+        unlockSem(semId, 0);
+
+        printf("Le master est pret a recevoir un client\n");
 
         // boucle infinie
-        loop(sb, semid2, Master_workers , Workers_master, data);
+        loop(semId/*DEUXIEME SEMAPHORE == 1*/, Master_workers , Workers_master, data);
 
         //Destructions :
 
         //Destruction des semaphores
-        semctl(semid1, -1, IPC_RMID);
-        semctl(semid2, -1, IPC_RMID);
+        semctl(semId, -1, IPC_RMID);
 
         //Destruction des tubes nommes
         unlink(ECRITURE_CLIENT);

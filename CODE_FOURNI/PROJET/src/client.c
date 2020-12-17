@@ -8,6 +8,7 @@
 #include <string.h>
 
 //
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
@@ -85,12 +86,18 @@ static int parseArgs(int argc, char * argv[], int *number)
     return order;
 }
 
+/************************************************************************
+ * Calcul numero prime avec les threads
+ ************************************************************************/
+
+//Structure traité par les threads
 typedef struct ThreadData
 {
     int number, div;
     bool * res;
 }ThreadData;
 
+//Fonction support des threads
 void * codeThread(void * arg)
 {
     ThreadData *data = (ThreadData *) arg;
@@ -105,6 +112,7 @@ void * codeThread(void * arg)
     return NULL;
 }
 
+//Fonction pour tester si un nombre est premier ou pas avec des threads
 void testPrimeWithThreads(int number)
 {
     int NB_THREADS = number - 3;
@@ -115,25 +123,29 @@ void testPrimeWithThreads(int number)
 
     ThreadData datas[NB_THREADS];
 
+    //Initialisation de la structure de données que va être traité par les threads
     for(int i = 0; i < NB_THREADS; i++)
     {
         datas[i].res = &(results[i]);
-        datas[i].div = i;
+        datas[i].div = i+2;
         datas[i].number = number;
     }
 
+    //Lancement des threads
     for(int i = 0; i < NB_THREADS; i++)
     {
         int ret = pthread_create(&(tabId[i]), NULL, codeThread, &(datas[i]));
         myassert(ret == 0, "Erreur lors de la création des threads");
     }
 
+    //Attente de la fin des thread
     for(int i = 0; i < NB_THREADS; i++)
     {
         int ret = pthread_join(tabId[i], NULL);
         myassert(ret == 0, "Erreur lors de l'attente des threads");
     }
 
+    //Pour toutes les cases du tableau resultats on teste si il y a une case qui contient false
     bool prime = true;
 
     for(int i = 0; i < NB_THREADS; i++)
@@ -145,13 +157,14 @@ void testPrimeWithThreads(int number)
         }
     }
 
+    //Affichage du resultat
     if(prime)
     {
-        printf("On attend que le nombre %d soit un nombre premier", number);
+        printf("Le nombre %d est un nombre premier.\n", number);
     }
     else
     {
-        printf("On n'attend pas que le nombre %d soit un nombre premier", number);
+        printf("Le nombre %d n'est pas un nombre premier.\n", number);
     }
     
     
@@ -204,36 +217,25 @@ int main(int argc, char * argv[])
     }
     else
     {
-        key_t key1, key2;
-        key1 = ftok(MON_FICHIER, CLIENT_PRESENT);
-        key2 = ftok(MON_FICHIER, CLIENT_ECRITURE);
-        int semid1 = semget(key1, 1, 0);
-        int semid2 = semget(key2, 1, 0);
+        key_t key;
+        key = ftok(MON_FICHIER, PROJ_ID);
+        int semId = semget(key, 2, 0);
 
         // on attend que la place soit libre
-        struct sembuf sb = { 0 , 0 , 0 };
-        semop(semid1, &sb, 1);
+        waitSem(semId, 0);
 
         //- entrer en section critique :
         //           . pour empêcher que 2 clients communiquent simultanément
         //           . le mutex est déjà créé par le master
 
         // la place est libre, on bloque pour etre le seul client sur le master
-        lockSem(semid1);
-
-        // On attend le master pour qu'il nous laisse ecrire
-        semop(semid2, &sb, 1);
-
-        // on bloque la semaphore client-master
-        lockSem(semid2);
+        lockSem(semId, 0);
 
         //    - ouvrir les tubes nommés (ils sont déjà créés par le master)
         //           . les ouvertures sont bloquantes, il faut s'assurer que
         //             le master ouvre les tubes dans le même ordre
-        int lecture = open(ECRITURE_MASTER, O_RDONLY);
-        myassert(lecture != -1, "Erreur lors de l'ouverture du pipe master->client");
-        int ecriture = open(ECRITURE_CLIENT, O_WRONLY);
-        myassert(ecriture != -1, "Erreur lors de l'ouverture du pipe master->client");
+        int ecriture, lecture;
+        openPipesClient(&ecriture, &lecture);
 
         //- envoyer l'ordre et les données éventuelles au master
         writeOnPipe(ecriture, order);
@@ -269,34 +271,15 @@ int main(int argc, char * argv[])
 
 
         //- sortir de la section critique
-        unlockSem(semid1);
+        unlockSem(semId, 0);
 
         //- libérer les ressources (fermeture des tubes, ...)
         // fermeture des tubes nommes
-        close(lecture);
-        close(ecriture);
+        closePipes(lecture, ecriture);
 
         //- débloquer le master grâce à un second sémaphore (cf. ci-dessous)
         // le programme est fini je debloque la sem
-        unlockSem(semid2);
-
-        /*
-        //Creation de la semaphore de presence du client
-        int semid1 = semget(key1, 1, IPC_CREAT | IPC_EXCL | 0641);
-        myassert(semid1 != -1, "Erreur lors de la création de la semaphore");
-
-        //Creation de la semaphore d'ecriture du client
-        int semid2 = semget(key2, 1, IPC_CREAT | IPC_EXCL | 0641);
-        myassert(semid2 != -1, "Erreur lors de la création de la semaphore");
-
-        //Blocage semaphore de presence du client
-        ret = semctl(semid1, 0, SETVAL, 1);
-        myassert(ret != -1, "Erreur lors de la initialisation de la semaphore");
-        
-        //Blocage semaphore d'ecriture du client
-        ret = semctl(semid2, 0, SETVAL, 1);
-        myassert(ret != -1, "Erreur lors de la initialisation de la semaphore"); 
-        */
+        lockSem(semId, 1);
     }
     return EXIT_SUCCESS;
 }
