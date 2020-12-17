@@ -20,6 +20,16 @@
 #include "master_client.h"
 #include "master_worker.h"
 
+// fonctions aux
+void creerTubeNommes(){
+    int ret;
+    ret = mkfifo(ECRITURE_MASTER, 0600);
+    myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
+    ret = mkfifo(ECRITURE_CLIENT, 0600);
+    myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
+}
+
+
 /************************************************************************
  * Données persistantes d'un master
  ************************************************************************/
@@ -187,10 +197,7 @@ int main(int argc, char * argv[])
     printf("J'ai initialise les semaphores \n");
 
     // - création des tubes nommés
-    ret = mkfifo(ECRITURE_MASTER, 0600);
-    myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
-    ret = mkfifo(ECRITURE_CLIENT, 0600);
-    myassert(ret != -1, "Erreur lors de la creation du tube nomme !");
+    creerTubesNommes();
 
     printf("J'ai cree les tubes nommes \n");
 
