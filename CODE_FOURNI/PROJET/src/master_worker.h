@@ -5,5 +5,8 @@
 //    - des constantes pour rendre plus lisible les comunications
 //    - des fonctions communes (écriture dans un tube, ...)
 
+char ** argListWorker (int permier_en_charge, int fdLecture , int fdEcriture); 
+
+void libererArgListWorker(char** list);
 
 #endif

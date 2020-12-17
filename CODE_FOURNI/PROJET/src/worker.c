@@ -95,18 +95,19 @@ void loop(WorkerData data)
                 myassert(pipe(ecriture_worker) != -1, "Erreur lors de la création du tube de communication vers le worker suivant");
                 
                 //Création de la listre d'arguments necessaires pour le nouveau worker
-                char* argv [5];
-                argv[0] = "./worker";
+                char** argv = argListWorker(nombre_a_tester, data.ecriture_worker_suivant[0], data.ecriture_master);
+                /*argv[0] = "./worker";
                 argv[1] = malloc(10 * sizeof(char));
                 argv[2] = malloc(10 * sizeof(char));
                 argv[3] = malloc(10 * sizeof(char));
                 sprintf(argv[1], "%d", nombre_a_tester);
                 sprintf(argv[2], "%d", data.ecriture_worker_suivant[0]);
                 sprintf(argv[3], "%d", data.ecriture_master);
-                argv[4] = NULL;
+                argv[4] = NULL;*/
 
                 //Création du nouveau worker
                 execv("./worker", argv);
+                libererArgListWorker(argv);
 
                 //Fermeture de la lecture du tube
                 close(data.ecriture_worker_suivant[0]);
